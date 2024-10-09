@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Draw Lines</title>
+    <style>
+        canvas {
+            border: 1px solid black;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="myCanvas" width="600" height="600"></canvas>
+
+    <script>
+        const canvas = document.getElementById('myCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const points = [
+            { x: 100, y: 100, radius: 10 },
+            { x: 200, y: 300, radius: 10 },
+            { x: 400, y: 150, radius: 10 },
+            { x: 350, y: 400, radius: 10 },
+            { x: 250, y: 500, radius: 10 }
+        ];
+
+        let drawing = false;
+        let startPoint = null;
+        let currentMousePosition = { x: 0, y: 0 };
+        let hoveredPoint = null;
+        let lines = [];
+
+        function drawPoints() {
+            points.forEach(point => {
+                ctx.beginPath();
+                ctx.arc(point.x, point.y, point.radius, 0, Math.PI * 2);
+                ctx.fillStyle = hoveredPoint === point ? 'green' : 'blue';
+                ctx.fill();
+                ctx.closePath();
+            });
+        }
+
+        function getNearbyPoint(x, y) {
+            return points.find(point => {
+                const dx = x - point.x;
+                const dy = y - point.y;
+                return Math.sqrt(dx * dx + dy * dy) <= point.radius;
+            });
+        }
+
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            const point = getNearbyPoint(mouseX, mouseY);
+            if (point) {
+                startPoint = point;
+                drawing = true;
+            }
+        });
+
+        canvas.addEventListener('mouseup', (e) => {
+            if (!drawing) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            const endPoint = getNearbyPoint(mouseX, mouseY);
+            if (endPoint && startPoint !== endPoint) {
+                const line = { start: startPoint, end: endPoint };
+                lines.push(line);
+                sendLineToApi(line);
+            }
+
+            drawing = false;
+            startPoint = null;
+            init();
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            hoveredPoint = getNearbyPoint(mouseX, mouseY);
+
+            if (drawing && startPoint) {
+                currentMousePosition = { x: mouseX, y: mouseY };
+            }
+
+            init();
+        });
+
+        function init() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawPoints();
+            drawLines();
+
+            if (drawing && startPoint) {
+                ctx.beginPath();
+                ctx.moveTo(startPoint.x, startPoint.y);
+                ctx.lineTo(currentMousePosition.x, currentMousePosition.y);
+                ctx.strokeStyle = 'gray';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                ctx.closePath();
+            }
+        }
+
+        function drawLines() {
+            lines.forEach(line => {
+                ctx.beginPath();
+                ctx.moveTo(line.start.x, line.start.y);
+                ctx.lineTo(line.end.x, line.end.y);
+                ctx.strokeStyle = 'red';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                ctx.closePath();
+            });
+        }
+
+        function sendLineToApi(line) {
+            fetch('http://localhost:5000/api/lines', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    start: { x: line.start.x, y: line.start.y },
+                    end: { x: line.end.x, y: line.end.y }
+                })
+            }).then(response => {
+                if (response.ok) {
+                    console.log('Line successfully sent to API');
+                } else {
+                    console.error('Failed to send line to API');
+                }
+            });
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
